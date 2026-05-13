@@ -1,0 +1,51 @@
+{
+  "basketName": "My Morning Basket",
+  "description": "Orders from screenshot",
+  "version": "1.0",
+  "orders": [
+    {
+      "tradingsymbol": "MAGNUS",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 6,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 193.05,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "AVI",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 37,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 26.73,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "CALSOFT-BE",
+      "exchange": "NSE",
+      "transaction_type": "BUY",
+      "quantity": 37,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 25.25,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "EMPOWER-BE",
+      "exchange": "NSE",
+      "transaction_type": "BUY",
+      "quantity": 370,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 2.7,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    }
+  ]
+}

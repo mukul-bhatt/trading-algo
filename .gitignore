@@ -1,0 +1,26 @@
+# ─────────────────────────────────────────────────────
+# Git ignore rules for the Trading Bot
+# ─────────────────────────────────────────────────────
+
+# Node.js dependencies – never commit these
+node_modules/
+
+# Your real environment file (contains secrets!)
+.env
+
+# Session file – contains your live access token
+# This refreshes every day anyway, no need to track it
+kite-session.json
+
+# Log files – these grow and are regenerated each run
+logs/*.log
+logs/*.json
+
+# macOS metadata files
+.DS_Store
+
+# Editor / IDE folders
+.vscode/
+.idea/logs/*.log
+logs/*.json
+!logs/.gitkeep
