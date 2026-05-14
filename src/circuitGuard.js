@@ -101,6 +101,14 @@ async function checkAndCancelIfLowerCircuit(kite, openBuyOrders) {
       { maxAttempts: 3, label: 'getQuote:circuitGuard' }
     );
   } catch (err) {
+    // "Insufficient permission" means kite.getQuote() is not available on
+    // the current Kite Connect subscription plan.
+    // Signal the caller to disable the guard permanently for this session.
+    if (err.message && err.message.toLowerCase().includes('insufficient permission')) {
+      const permError = new Error('PERMISSION_DENIED');
+      permError.isPermissionDenied = true;
+      throw permError;
+    }
     logger.warn(`🛡️  Circuit guard: getQuote failed – ${err.message}`);
     return;
   }
@@ -198,7 +206,9 @@ async function runGuardCycle(kite, basketSymbols) {
     await checkAndCancelIfLowerCircuit(kite, openBuyOrders);
 
   } catch (err) {
-    // Don't crash the guard loop on a single failed cycle
+    // Re-throw permission errors so startCircuitGuard can disable the interval
+    if (err.isPermissionDenied) throw err;
+    // Don't crash the guard loop on any other failed cycle
     logger.warn('🛡️  Circuit guard cycle error', { error: err.message });
   }
 }
@@ -226,10 +236,37 @@ async function startCircuitGuard() {
 
   const kite = getKiteClient();
 
-  // Run first check immediately, then on interval
-  await runGuardCycle(kite, basketSymbols);
+  // Run first check immediately — this also validates API permissions.
+  // If getQuote() is not available on the current plan, we disable the guard
+  // permanently rather than spamming errors every 30 seconds.
+  try {
+    await runGuardCycle(kite, basketSymbols);
+  } catch (err) {
+    if (err.isPermissionDenied) {
+      logger.warn('');
+      logger.warn('🛡️  Circuit guard DISABLED for this session.');
+      logger.warn('   Reason: kite.getQuote() returned "Insufficient permission".');
+      logger.warn('   This means your Kite Connect plan does not include market');
+      logger.warn('   quote data access (getQuote API).');
+      logger.warn('   → To enable: upgrade your Kite Connect subscription at');
+      logger.warn('     https://developers.kite.trade/');
+      logger.warn('   The rest of the bot (orders, monitoring) is unaffected.');
+      logger.warn('');
+      return; // exit — no interval will be set
+    }
+    logger.warn('🛡️  Circuit guard: first cycle failed', { error: err.message });
+  }
 
-  setInterval(() => runGuardCycle(kite, basketSymbols), GUARD_INTERVAL);
+  const interval = setInterval(async () => {
+    try {
+      await runGuardCycle(kite, basketSymbols);
+    } catch (err) {
+      if (err.isPermissionDenied) {
+        logger.warn('🛡️  Circuit guard: permission denied — stopping interval.');
+        clearInterval(interval);
+      }
+    }
+  }, GUARD_INTERVAL);
 
   logger.info('🛡️  Circuit guard is active.');
 }

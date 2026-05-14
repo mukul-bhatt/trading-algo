@@ -145,9 +145,13 @@ async function fetchMedianVolume(kite, instrumentToken, tradingsymbol) {
     const fromStr = from.toISOString().slice(0, 10);
     const toStr   = to.toISOString().slice(0, 10);
 
+    // maxAttempts:1 – historical data API requires a separate Kite Connect
+    // add-on subscription.  If the account doesn't have it we get
+    // "Insufficient permission" on the very first call; retrying just adds
+    // noise without any chance of success, so we fail fast.
     const candles = await retry(
       () => kite.getHistoricalData(instrumentToken, 'day', fromStr, toStr),
-      { maxAttempts: 3, label: `historicalData:${tradingsymbol}` }
+      { maxAttempts: 1, label: `historicalData:${tradingsymbol}` }
     );
 
     if (!candles || candles.length === 0) {
@@ -173,7 +177,17 @@ async function fetchMedianVolume(kite, instrumentToken, tradingsymbol) {
     return med;
 
   } catch (err) {
-    logger.warn(`⚠️  Could not fetch history for ${tradingsymbol}: ${err.message}`);
+    // "Insufficient permission" means the Kite Connect plan does not include
+    // the Historical Data API add-on.  Volume signal will be disabled but
+    // the depth-ratio signal and stop-loss check will still work.
+    if (err.message && err.message.toLowerCase().includes('insufficient permission')) {
+      logger.warn(
+        `⚠️  Historical Data API not available for ${tradingsymbol} ` +
+        `(plan add-on required). Volume signal disabled – depth & stop-loss still active.`
+      );
+    } else {
+      logger.warn(`⚠️  Could not fetch history for ${tradingsymbol}: ${err.message}`);
+    }
     return null;
   }
 }
@@ -359,15 +373,21 @@ function logAlert(holding, tick, volResult, depthResult) {
   const ts  = new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
   const ltp = formatCurrency(tick.last_price);
   const avg = formatCurrency(holding.average_price);
+  const hasVol = volResult.fired !== undefined && volResult.actual !== undefined;
 
   logger.warn('');
   logger.warn('╔══════════════════════════════════════════════════════════════╗');
   logger.warn(`║  🚨 OPERATOR EXIT SIGNAL  –  ${holding.tradingsymbol}  @ ${ts} IST`);
   logger.warn('╠══════════════════════════════════════════════════════════════╣');
-  logger.warn(`║  📈 VOLUME SPIKE`);
-  logger.warn(`║     Actual today  : ${volResult.actual.toLocaleString('en-IN')} shares`);
-  logger.warn(`║     Expected by now: ${volResult.expected.toLocaleString('en-IN')} shares`);
-  logger.warn(`║     Ratio         : ${volResult.ratio.toFixed(2)}× (threshold: ${VOL_MULTIPLIER}×)`);
+  if (hasVol) {
+    logger.warn(`║  📈 VOLUME SPIKE`);
+    logger.warn(`║     Actual today  : ${volResult.actual.toLocaleString('en-IN')} shares`);
+    logger.warn(`║     Expected by now: ${volResult.expected.toLocaleString('en-IN')} shares`);
+    logger.warn(`║     Ratio         : ${volResult.ratio.toFixed(2)}× (threshold: ${VOL_MULTIPLIER}×)`);
+  } else {
+    logger.warn(`║  📈 VOLUME SIGNAL  : N/A (Historical Data API add-on not subscribed)`);
+    logger.warn(`║     Running in depth-only mode – consider upgrading for dual-signal`);
+  }
   logger.warn('╠══════════════════════════════════════════════════════════════╣');
   logger.warn(`║  📉 DEPTH RATIO SPIKE`);
   logger.warn(`║     Buy  queue    : ${depthResult.buyQty.toLocaleString('en-IN')} shares`);
@@ -397,11 +417,23 @@ function handleTick(tick) {
   // ── GUARD: never act on a stock already sold today ────────────────────────
   if (soldToday.has(tick.instrument_token)) return;
 
-  // ── SIGNAL CHECK: dual-signal operator exit (volume + depth) ─────────────
+  // ── SIGNAL CHECK: operator exit detection ────────────────────────────────
+  //
+  // PREFERRED (dual-signal): volume spike AND depth-ratio spike must both fire.
+  // This is the most reliable and produces the fewest false positives.
+  //
+  // FALLBACK (depth-only): used automatically when no volume baseline exists
+  // (i.e. the Kite Connect Historical Data API add-on is not subscribed).
+  // Depth-ratio alone is still a strong early-warning signal.
   const volResult   = checkVolumeSpike(tick, baseline);
   const depthResult = checkDepthSpike(tick);
 
-  if (volResult.fired && depthResult.fired) {
+  const hasVolBaseline = !!baseline.medianVolume;
+  const signalFired    = hasVolBaseline
+    ? (volResult.fired && depthResult.fired)   // dual-signal (preferred)
+    : depthResult.fired;                        // depth-only fallback
+
+  if (signalFired) {
     // Cooldown – don't spam alerts for the same stock
     const now       = Date.now();
     const lastAlert = lastAlertAt.get(tick.instrument_token) || 0;
@@ -411,7 +443,8 @@ function handleTick(tick) {
       logAlert(holding, tick, volResult, depthResult);
 
       if (AUTO_SELL) {
-        const reason = `vol:${volResult.ratio.toFixed(2)}x depth:${depthResult.ratio.toFixed(4)}`;
+        const mode   = hasVolBaseline ? `vol:${volResult.ratio.toFixed(2)}x ` : 'depth-only ';
+        const reason = `${mode}depth:${depthResult.ratio.toFixed(4)}`;
         triggerSell(holding, tick.last_price, reason).catch((err) =>
           logger.error(`triggerSell error: ${err.message}`)
         );
@@ -531,22 +564,38 @@ async function startHoldingsMonitor() {
   const tokens = [...holdingsMap.keys()];
   const ticker = startTicker(tokens);
 
-  // Race: either 'connect' fires within 30s, or we time out
+  // Race: either 'connect' fires within 30s, or we time out.
+  //
+  // NOTE: KiteTicker v5 does NOT expose .once() – only .on().
+  // We implement one-shot behaviour manually: the handler removes itself
+  // the first time it fires so it never triggers again.
   const connected = await new Promise((resolve) => {
+    let settled = false;
+
     const timeout = setTimeout(() => {
-      resolve(false); // timed out
+      if (!settled) { settled = true; resolve(false); }
     }, 30_000);
 
-    ticker.once('connect', () => {
-      clearTimeout(timeout);
-      resolve(true); // connected!
-    });
+    function onConnect() {
+      ticker.on('connect', () => {}); // no-op to satisfy KiteTicker
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        resolve(true); // connected!
+      }
+    }
 
-    // If an error fires before connect, resolve false immediately
-    ticker.once('error', () => {
-      clearTimeout(timeout);
-      resolve(false);
-    });
+    function onError() {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        resolve(false);
+      }
+    }
+
+    // KiteTicker only has .on() – wire one-shot wrappers
+    ticker.on('connect', onConnect);
+    ticker.on('error',   onError);
   });
 
   if (!connected) {

@@ -11,6 +11,8 @@
     "login": "node src/login.js",
     "orders": "node src/main.js orders",
     "monitor": "node src/main.js monitor",
+    "holdingswatch": "node src/main.js holdingswatch",
+    "diagnose": "node src/diagnose.js",
     "test": "echo \"No tests yet – coming in a later phase\""
   },
   "dependencies": {
