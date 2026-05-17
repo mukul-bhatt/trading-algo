@@ -1,49 +1,71 @@
 {
   "basketName": "My Morning Basket",
-  "description": "Orders from screenshot – 14 May 2026",
+  "description": "Updated basket orders for tomorrow's pre-open session",
   "version": "1.0",
   "orders": [
     {
       "tradingsymbol": "ENVAIREL",
       "exchange": "BSE",
       "transaction_type": "BUY",
-      "quantity": 15,
+      "quantity": 14,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 70.30,
+      "price": 77.55,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     },
     {
       "tradingsymbol": "MAGNUS",
       "exchange": "BSE",
-      "transaction_type": "BUY",
+      "transaction_type": "SELL",
       "quantity": 5,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 223.40,
+      "price": 201.65,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     },
     {
-      "tradingsymbol": "KUBERJI",
-      "exchange": "BSE",
+      "tradingsymbol": "AHLWEST-BE",
+      "exchange": "NSE",
       "transaction_type": "BUY",
-      "quantity": 38,
+      "quantity": 2,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 29.22,
+      "price": 618.25,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "NATHUEC",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 37,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 29.04,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "CUBIFIN",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 350,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 2.97,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     },
     {
       "tradingsymbol": "SURBHIN",
       "exchange": "BSE",
-      "transaction_type": "BUY",
+      "transaction_type": "SELL",
       "quantity": 6,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 178.30,
+      "price": 177.20,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     }

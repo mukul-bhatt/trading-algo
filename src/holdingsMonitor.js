@@ -213,13 +213,38 @@ async function loadHoldingsAndBaselines(kite) {
   // Build updated map
   const freshMap = new Map();
   for (const h of raw) {
+    // WHY t1_quantity?
+    // ─────────────────
+    // For T2T (Trade-to-Trade) / ESM / penny stocks, shares purchased recently
+    // sit in SETTLEMENT LIMBO for T+1 or T+2 days.  During this window, Kite
+    // reports `quantity: 0` ("settled / deliverable today") while the actual
+    // shares are reflected in `t1_quantity` (arriving tomorrow) or
+    // `authorised_quantity` (authorised but not yet debited by the exchange).
+    //
+    // If we blindly use `h.quantity`, we pass qty=0 to placeOrder() → Kite
+    // rejects with "Invalid `quantity`."
+    //
+    // FIX: use the first non-zero value across the three quantity fields.
+    const effectiveQty = h.quantity || h.t1_quantity || h.authorised_quantity || 0;
+
     freshMap.set(h.instrument_token, {
       tradingsymbol:    h.tradingsymbol,
       exchange:         h.exchange,
-      quantity:         h.quantity,
+      quantity:         effectiveQty,
+      t1_quantity:      h.t1_quantity      || 0,
+      authorised_qty:   h.authorised_quantity || 0,
       average_price:    h.average_price,
       instrument_token: h.instrument_token,
     });
+
+    if (h.quantity === 0 && effectiveQty > 0) {
+      logger.warn(
+        `⚠️  ${h.tradingsymbol}: quantity=0 (shares in T+1 settlement).` +
+        `  Using effective qty=${effectiveQty}` +
+        ` (t1=${h.t1_quantity || 0}, authorised=${h.authorised_quantity || 0}).` +
+        `  NOTE: Kite may still reject a sell until settlement completes.`
+      );
+    }
   }
 
   // Fetch baseline only for newly seen holdings
@@ -315,6 +340,19 @@ async function triggerSell(holding, ltp, reason) {
   // Guard: already sold today
   if (soldToday.has(instrument_token)) {
     logger.warn(`⚠️  ${tradingsymbol}: already sold today – skipping duplicate sell`);
+    return;
+  }
+
+  // Guard: zero quantity – this happens when shares are still in T+1 settlement
+  // and neither `quantity` nor `t1_quantity` / `authorised_quantity` gave us a
+  // positive number.  Placing a qty=0 order would be rejected by Kite with
+  // "Invalid `quantity`."
+  if (!quantity || quantity <= 0) {
+    logger.error(
+      `❌ ${tradingsymbol}: cannot sell – effective quantity is ${quantity}.` +
+      `  Shares may still be in T+1/T+2 settlement and not yet deliverable.` +
+      `  Check your Zerodha Holdings tab for the actual status.`
+    );
     return;
   }
 

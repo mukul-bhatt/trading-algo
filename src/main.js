@@ -48,9 +48,11 @@ require('dotenv').config();
 const cron   = require('node-cron');
 const logger = require('./logger');
 const { placeBasketOrders }     = require('./placeOrders');
+const { placePcaBasketOrders }  = require('./pcaOrders');
 const { startMonitor }          = require('./monitor');
 const { startHoldingsMonitor }  = require('./holdingsMonitor');
 const { startCircuitGuard }     = require('./circuitGuard');
+const { scheduleIlliquidSell }  = require('./illiquidSell');
 const { isDryRun, getISTTime, isMarketHours } = require('./utils');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,6 +64,7 @@ function printBanner() {
   logger.info('║         ZERODHA TRADING BOT  v1.1                   ║');
   logger.info('║         Kite Connect Automation Engine               ║');
   logger.info('║         + Operator-Exit Spike Monitor                ║');
+  logger.info('║         + Periodic Call Auction (PCA) Scheduler      ║');
   logger.info('╚══════════════════════════════════════════════════════╝');
   logger.info(`  Mode:    ${isDryRun() ? '🧪 DRY RUN (paper trading)' : '🔴 LIVE TRADING'}`);
   logger.info(`  Time:    ${getISTTime()}`);
@@ -141,6 +144,48 @@ function scheduleOrders() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// schedulePcaOrders()
+// ─────────────────────────────────────────────────────────────────────────────
+// Sets up a cron job to fire at exactly 9:30:00 AM every weekday —
+// the moment NSE opens Session 1 of the Periodic Call Auction.
+//
+// PCA SESSION REFERENCE:
+//   Session 1  →  9:30 AM – 10:15 AM  (45-min auction)
+//   Buffer     →  10:15 AM – 10:30 AM (15-min gap)
+//   Session 2  →  10:30 AM – 11:15 AM
+//   … and so on.  This scheduler targets Session 1 only.
+//
+// WHY NOT PRE-OPEN (9:00 AM)?
+//   PCA stocks are NOT part of the NSE pre-open session.
+//   The exchange only accepts PCA orders once the auction window opens.
+//   Sending them at 9:00 AM would result in rejection.
+//
+function schedulePcaOrders() {
+  // "30 9 * * 1-5" → 9:30:00 AM sharp, Monday–Friday IST
+  const cronExpression   = '30 9 * * 1-5';
+  const POST_FIRE_DELAY  = 200; // ms – small buffer after cron fires
+
+  logger.info('🕐 PCA order schedule: Session 1 at 09:30:00 AM IST (weekdays)');
+  logger.info('   PCA session window: 9:30 AM – 10:15 AM (45 min auction)');
+  logger.info('   Cron expression:   ' + cronExpression);
+
+  cron.schedule(
+    cronExpression,
+    async () => {
+      logger.info('⏰ PCA cron fired at 9:30 AM – waiting 200ms before placing orders…');
+      await new Promise((resolve) => setTimeout(resolve, POST_FIRE_DELAY));
+      logger.info('🚀 Placing PCA basket orders now (Session 1 open)');
+      try {
+        await placePcaBasketOrders();
+      } catch (err) {
+        logger.error('PCA basket placement failed', { error: err.message });
+      }
+    },
+    { timezone: 'Asia/Kolkata' }
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // gracefulShutdown()
 // ─────────────────────────────────────────────────────────────────────────────
 // Called when the user presses Ctrl+C.
@@ -210,14 +255,51 @@ async function main() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // COMMAND: pcaorders
+  // Place PCA basket orders RIGHT NOW (manual trigger, skips the 9:30 cron)
+  // Useful for testing or if you need to place manually outside the schedule.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (command === 'pcaorders') {
+    logger.info('Command: place PCA basket orders now (manual trigger)');
+    try {
+      await placePcaBasketOrders();
+    } catch (err) {
+      logger.error('PCA basket placement failed', { error: err.message });
+    }
+    logger.info('Done. Exiting.');
+    process.exit(0);
+    return;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // COMMAND: illiquidsell
+  // Manually trigger the illiquid sell prep and execution immediately
+  // ─────────────────────────────────────────────────────────────────────────
+  if (command === 'illiquidsell') {
+    logger.info('Command: illiquid sell trigger immediately');
+    const { prepareIlliquidOrders, executeIlliquidOrders } = require('./illiquidSell');
+    await prepareIlliquidOrders();
+    await executeIlliquidOrders();
+    logger.info('Done. Exiting.');
+    process.exit(0);
+    return;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // DEFAULT: start (full bot)
   // Schedule orders at 9:00 AM + polling monitor + spike monitor
   // ─────────────────────────────────────────────────────────────────────────
   if (command === 'start') {
     logger.info('Starting full bot: scheduler + polling monitor + holdings spike monitor + circuit guard');
 
-    // Set up the 9:00 AM order scheduler
+    // Set up the 9:00 AM regular basket scheduler (pre-open)
     scheduleOrders();
+
+    // Set up the 9:30 AM PCA basket scheduler (Session 1)
+    schedulePcaOrders();
+
+    // Set up the 9:30 AM illiquid stocks sell scheduler (T2T call auction)
+    scheduleIlliquidSell();
 
     // Start the lower circuit guard
     // Polls every 30s for open BUY orders that are at lower circuit → cancels them
@@ -241,9 +323,11 @@ async function main() {
   logger.error(`Unknown command: "${command}"`);
   logger.info('Available commands:');
   logger.info('  node src/main.js               → Full bot (scheduler + monitors + circuit guard)');
-  logger.info('  node src/main.js orders        → Place basket orders now');
+  logger.info('  node src/main.js orders        → Place regular basket orders now (9:00 AM pre-open)');
+  logger.info('  node src/main.js pcaorders     → Place PCA basket orders now (Session 1 / 9:30 AM)');
   logger.info('  node src/main.js monitor       → Polling monitor only (positions, holdings, orders)');
   logger.info('  node src/main.js holdingswatch → Real-time holdings spike monitor only');
+  logger.info('  node src/main.js illiquidsell  → Run illiquid sell routine immediately');
   logger.info('  node src/login.js              → Manage login / access token');
   process.exit(1);
 }

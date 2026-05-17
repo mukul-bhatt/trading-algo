@@ -1,0 +1,19 @@
+{
+  "basketName": "PCA Session 1 Basket",
+  "description": "Periodic Call Auction – Session 1 (fires at 9:30:00 AM IST sharp). Only LIMIT orders. Exchange must be NSE or BSE per stock.",
+  "version": "1.0",
+  "orders": [
+    {
+      "_comment": "⬇ Replace with your actual PCA stock. Change exchange to NSE or BSE as needed.",
+      "tradingsymbol":"EMPOWER-BE",
+      "exchange": "NSE",
+      "transaction_type": "SELL",
+      "quantity": 370,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 2.66,
+      "validity": "DAY",
+      "tag": "pca-s1"
+    }
+  ]
+}
