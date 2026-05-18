@@ -96,6 +96,9 @@ const lastAlertAt = new Map();
 // Set<instrumentToken> – stocks already sold today (prevents duplicate orders)
 const soldToday = new Set();
 
+// Map<instrumentToken, count> - count of failed triggerSell attempts
+const failedToday = new Map();
+
 // Reference to kite client – set once on startup
 let kiteClient = null;
 
@@ -199,15 +202,24 @@ async function fetchMedianVolume(kite, instrumentToken, tradingsymbol) {
  * For any new holding not yet in baselines, fetches the median volume baseline.
  */
 async function loadHoldingsAndBaselines(kite) {
-  const raw = await retry(
-    () => kite.getHoldings(),
-    { maxAttempts: 3, label: 'getHoldings' }
-  );
+  const [raw, orders] = await Promise.all([
+    retry(() => kite.getHoldings(), { maxAttempts: 3, label: 'getHoldings' }),
+    retry(() => kite.getOrders(), { maxAttempts: 3, label: 'getOrders' }).catch(() => [])
+  ]);
 
   if (raw.length === 0) {
     logger.info('📁 Holdings: none found.');
     holdingsMap.clear();
     return;
+  }
+
+  // Calculate open sell quantity per instrument to avoid duplicate sell errors
+  const openSellQtyMap = new Map();
+  for (const o of orders) {
+    if (o.status === 'OPEN' && o.transaction_type === 'SELL') {
+      const qty = (openSellQtyMap.get(o.instrument_token) || 0) + o.pending_quantity;
+      openSellQtyMap.set(o.instrument_token, qty);
+    }
   }
 
   // Build updated map
@@ -221,11 +233,10 @@ async function loadHoldingsAndBaselines(kite) {
     // shares are reflected in `t1_quantity` (arriving tomorrow) or
     // `authorised_quantity` (authorised but not yet debited by the exchange).
     //
-    // If we blindly use `h.quantity`, we pass qty=0 to placeOrder() → Kite
-    // rejects with "Invalid `quantity`."
-    //
     // FIX: use the first non-zero value across the three quantity fields.
-    const effectiveQty = h.quantity || h.t1_quantity || h.authorised_quantity || 0;
+    const baseQty = h.quantity || h.t1_quantity || h.authorised_quantity || 0;
+    const openQty = openSellQtyMap.get(h.instrument_token) || 0;
+    const effectiveQty = Math.max(0, baseQty - openQty);
 
     freshMap.set(h.instrument_token, {
       tradingsymbol:    h.tradingsymbol,
@@ -235,6 +246,7 @@ async function loadHoldingsAndBaselines(kite) {
       authorised_qty:   h.authorised_quantity || 0,
       average_price:    h.average_price,
       instrument_token: h.instrument_token,
+      blocked_by_orders: openQty
     });
 
     if (h.quantity === 0 && effectiveQty > 0) {
@@ -244,6 +256,8 @@ async function loadHoldingsAndBaselines(kite) {
         ` (t1=${h.t1_quantity || 0}, authorised=${h.authorised_quantity || 0}).` +
         `  NOTE: Kite may still reject a sell until settlement completes.`
       );
+    } else if (openQty > 0) {
+      logger.info(`ℹ️  ${h.tradingsymbol}: ${openQty} shares locked in open orders. Free qty: ${effectiveQty}`);
     }
   }
 
@@ -344,15 +358,18 @@ async function triggerSell(holding, ltp, reason) {
   }
 
   // Guard: zero quantity – this happens when shares are still in T+1 settlement
-  // and neither `quantity` nor `t1_quantity` / `authorised_quantity` gave us a
-  // positive number.  Placing a qty=0 order would be rejected by Kite with
-  // "Invalid `quantity`."
+  // or when they are already locked in an existing OPEN sell order.
   if (!quantity || quantity <= 0) {
-    logger.error(
-      `❌ ${tradingsymbol}: cannot sell – effective quantity is ${quantity}.` +
-      `  Shares may still be in T+1/T+2 settlement and not yet deliverable.` +
-      `  Check your Zerodha Holdings tab for the actual status.`
-    );
+    if (holding.blocked_by_orders > 0) {
+      logger.warn(`⚠️  ${tradingsymbol}: cannot sell – ${holding.blocked_by_orders} shares are locked in an existing OPEN order.`);
+      soldToday.add(instrument_token); // Prevent further spam
+    } else {
+      logger.error(
+        `❌ ${tradingsymbol}: cannot sell – effective quantity is ${quantity}.` +
+        `  Shares may still be in T+1/T+2 settlement and not yet deliverable.` +
+        `  Check your Zerodha Holdings tab for the actual status.`
+      );
+    }
     return;
   }
 
@@ -401,7 +418,15 @@ async function triggerSell(holding, ltp, reason) {
     logger.warn(`✅ AUTO-SELL ORDER PLACED  ${tradingsymbol}  qty:${quantity}  price:${ltp}  order_id:${orderId}`);
 
   } catch (err) {
-    logger.error(`❌ Auto-sell FAILED for ${tradingsymbol}`, { error: err.message });
+    const count = (failedToday.get(instrument_token) || 0) + 1;
+    failedToday.set(instrument_token, count);
+
+    if (count >= 3) {
+      soldToday.add(instrument_token);
+      logger.error(`❌ Auto-sell FAILED for ${tradingsymbol} 3 times. Disabling further attempts for today to prevent API spam.`, { error: err.message });
+    } else {
+      logger.error(`❌ Auto-sell FAILED for ${tradingsymbol} (attempt ${count}/3). Will try again on next signal.`, { error: err.message });
+    }
   }
 }
 

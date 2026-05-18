@@ -71,6 +71,14 @@ function printBanner() {
   logger.info(`  Market:  ${isMarketHours() ? '🟢 Open' : '🔴 Closed'}`);
   logger.info('');
 
+  logger.info('  ┌───────────────── DAILY REMINDERS ──────────────────┐');
+  logger.info('  │ 1. Is your current IP address whitelisted on Kite? │');
+  logger.info('  │    (If not, your orders will be rejected)          │');
+  logger.info('  │ 2. Did you complete CDSL Authorization today?      │');
+  logger.info('  │    (Required to sell delivery holdings)            │');
+  logger.info('  └────────────────────────────────────────────────────┘');
+  logger.info('');
+
   if (isDryRun()) {
     logger.info('  ┌────────────────────────────────────────────────────┐');
     logger.info('  │  DRY RUN MODE is ON                                │');
@@ -119,7 +127,7 @@ async function runOrdersNow() {
 function scheduleOrders() {
   // "0 9 * * 1-5" → 09:00:00 AM sharp, Monday–Friday
   const cronExpression = '0 9 * * 1-5';
-  const PRE_PLACE_DELAY_MS = 500; // 500 milliseconds
+  const PRE_PLACE_DELAY_MS = 50; // 50 milliseconds
 
   logger.info('🕐 Order schedule: daily at 09:00:00 AM IST (weekdays)');
   logger.info('   Pre-open session: orders queue for 9:15 AM market open');
@@ -128,7 +136,7 @@ function scheduleOrders() {
   cron.schedule(
     cronExpression,
     async () => {
-      logger.info('⏰ Cron fired at 9:00 AM – waiting 500ms before placing orders…');
+      logger.info('⏰ Cron fired at 9:00 AM – waiting 50ms before placing orders…');
 
       // Small delay so the API is ready to accept pre-open orders
       await new Promise((resolve) => setTimeout(resolve, PRE_PLACE_DELAY_MS));
