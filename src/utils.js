@@ -156,6 +156,61 @@ function isMarketHours() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// appendToPCABasket(order)
+// ─────────────────────────────────────────────────────────────────────────────
+// If an order fails because a stock is in the Trade-to-Trade (T2T) category,
+// we automatically push it to the Periodic Call Auction (PCA) basket.
+//
+function appendToPCABasket(order) {
+  const fs = require('fs');
+  const path = require('path');
+  const pcaPath = path.join(__dirname, '..', 'config', 'pca_basket.json');
+
+  let pcaBasket;
+  try {
+    if (fs.existsSync(pcaPath)) {
+      pcaBasket = JSON.parse(fs.readFileSync(pcaPath, 'utf8'));
+    } else {
+      pcaBasket = {
+        basketName: "PCA Basket (Auto-Generated)",
+        description: "Orders automatically moved here due to trade-to-trade error",
+        version: "1.0",
+        orders: []
+      };
+    }
+  } catch (err) {
+    logger.error(`Failed to read pca_basket.json for auto-conversion: ${err.message}`);
+    return;
+  }
+
+  // Create a clean copy of the order with 'pca-auto' tag
+  const pcaOrder = {
+    tradingsymbol: order.tradingsymbol,
+    exchange: order.exchange || 'BSE', // Defaulting to BSE as most T2T are BSE
+    transaction_type: order.transaction_type,
+    quantity: order.quantity,
+    product: order.product || 'CNC',
+    order_type: order.order_type || 'LIMIT',
+    price: order.price,
+    validity: order.validity || 'DAY',
+    tag: 'pca-auto'
+  };
+
+  // Avoid duplicates
+  const isDup = pcaBasket.orders.some(
+    (o) => o.tradingsymbol === pcaOrder.tradingsymbol && o.transaction_type === pcaOrder.transaction_type
+  );
+
+  if (!isDup) {
+    pcaBasket.orders.push(pcaOrder);
+    fs.writeFileSync(pcaPath, JSON.stringify(pcaBasket, null, 2));
+    logger.info(`✅ Successfully added ${pcaOrder.tradingsymbol} to Periodic Call Auction basket.`);
+  } else {
+    logger.info(`⚠️ ${pcaOrder.tradingsymbol} is already in the PCA basket. Skipping.`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // getISTTime()
 // ─────────────────────────────────────────────────────────────────────────────
 // Returns current time as a human-readable IST string for logs.
@@ -171,4 +226,5 @@ module.exports = {
   formatCurrency,
   isMarketHours,
   getISTTime,
+  appendToPCABasket,
 };

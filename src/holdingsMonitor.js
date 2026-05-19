@@ -54,7 +54,7 @@ require('dotenv').config();
 
 const logger          = require('./logger');
 const { getKiteClient }  = require('./login');
-const { retry, formatCurrency, isDryRun, sleep } = require('./utils');
+const { retry, formatCurrency, isDryRun, sleep, appendToPCABasket, isMarketHours } = require('./utils');
 const { startTicker } = require('./websocket');
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -418,14 +418,33 @@ async function triggerSell(holding, ltp, reason) {
     logger.warn(`✅ AUTO-SELL ORDER PLACED  ${tradingsymbol}  qty:${quantity}  price:${ltp}  order_id:${orderId}`);
 
   } catch (err) {
+    const errMsg = err?.response?.data?.message || err.message;
     const count = (failedToday.get(instrument_token) || 0) + 1;
     failedToday.set(instrument_token, count);
 
+    // Auto-convert trade-to-trade / PCA to PCA basket
+    const lowerErr = errMsg ? errMsg.toLowerCase() : '';
+    if (lowerErr.includes('trade to trade') || lowerErr.includes('periodic call auction')) {
+      logger.warn(`🔄 Auto-converting ${tradingsymbol} to Periodic Call Auction basket due to rejected order error.`);
+      const pcaOrder = {
+        tradingsymbol,
+        exchange,
+        transaction_type: 'SELL',
+        quantity,
+        product: 'CNC',
+        order_type: 'LIMIT',
+        price: ltp,
+        validity: 'DAY',
+        tag: 'pca-auto'
+      };
+      appendToPCABasket(pcaOrder);
+    }
+
     if (count >= 3) {
       soldToday.add(instrument_token);
-      logger.error(`❌ Auto-sell FAILED for ${tradingsymbol} 3 times. Disabling further attempts for today to prevent API spam.`, { error: err.message });
+      logger.error(`❌ Auto-sell FAILED for ${tradingsymbol} 3 times. Disabling further attempts for today to prevent API spam.`, { error: errMsg });
     } else {
-      logger.error(`❌ Auto-sell FAILED for ${tradingsymbol} (attempt ${count}/3). Will try again on next signal.`, { error: err.message });
+      logger.error(`❌ Auto-sell FAILED for ${tradingsymbol} (attempt ${count}/3). Will try again on next signal.`, { error: errMsg });
     }
   }
 }
@@ -570,6 +589,9 @@ function handleTick(tick) {
 // ── Periodic holdings refresh ─────────────────────────────────────────────────
 
 async function refreshHoldings(kite, ticker) {
+  if (!isMarketHours()) {
+    return;
+  }
   try {
     logger.info('🔄 Refreshing holdings list…');
     await loadHoldingsAndBaselines(kite);

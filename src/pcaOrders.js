@@ -316,7 +316,7 @@ async function placePcaBasketOrders() {
 
       // Small delay between orders to stay within Kite rate limits
       if (i < basket.orders.length - 1) {
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 350));
       }
 
     } catch (err) {

@@ -167,12 +167,21 @@ async function startMonitor() {
 
   const kite = getKiteClient();
 
+  let lastStateClosed = false;
+
   // Run first cycle immediately, then every POLL_INTERVAL_MS
   const runLoop = async () => {
     try {
       if (!isMarketHours()) {
-        logger.info('⏰ Market is currently CLOSED.  Monitoring paused.');
+        if (!lastStateClosed) {
+          logger.info('⏰ Market is currently CLOSED.  Monitoring paused.');
+          lastStateClosed = true;
+        }
       } else {
+        if (lastStateClosed) {
+          logger.info('⏰ Market is OPEN. Resuming monitoring.');
+          lastStateClosed = false;
+        }
         await runMonitorCycle(kite);
       }
     } catch (err) {
@@ -180,8 +189,9 @@ async function startMonitor() {
       logger.error('Monitor cycle error', { error: err.message });
     }
 
-    // Schedule next cycle
-    setTimeout(runLoop, POLL_INTERVAL_MS);
+    // Schedule next cycle (check less frequently if market is closed)
+    const delay = isMarketHours() ? POLL_INTERVAL_MS : 60000;
+    setTimeout(runLoop, delay);
   };
 
   await runLoop();

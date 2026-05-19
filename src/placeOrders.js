@@ -41,7 +41,7 @@ const fs   = require('fs');
 const path = require('path');
 
 const logger               = require('./logger');
-const { retry, isDryRun, formatCurrency } = require('./utils');
+const { retry, isDryRun, formatCurrency, appendToPCABasket } = require('./utils');
 const { getKiteClient }    = require('./login');
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
@@ -343,14 +343,22 @@ async function placeBasketOrders() {
       results.push({ ...order, order_id: orderId, status: 'placed' });
 
       // Small delay between orders to avoid rate-limiting
-      // Kite allows ~3 requests/second; 500ms keeps us well within limits
+      // Kite allows ~3 requests/second; 350ms keeps us well within limits
       if (i < basket.orders.length - 1) {
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 350));
       }
 
     } catch (err) {
       const errMsg = err?.response?.data?.message || err.message;
       logger.error(`❌ Failed to place order: ${label}`, { error: errMsg });
+      
+      // Auto-convert trade-to-trade / PCA to PCA basket
+      const lowerErr = errMsg ? errMsg.toLowerCase() : '';
+      if (lowerErr.includes('trade to trade') || lowerErr.includes('periodic call auction')) {
+        logger.warn(`🔄 Auto-converting ${order.tradingsymbol} to Periodic Call Auction basket due to rejected order error.`);
+        appendToPCABasket(order);
+      }
+
       results.push({ ...order, order_id: null, status: 'failed', error: errMsg });
     }
   }
