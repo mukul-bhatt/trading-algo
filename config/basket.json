@@ -3,7 +3,6 @@
   "description": "Updated basket orders for tomorrow's pre-open session",
   "version": "1.0",
   "orders": [
-   
     {
       "tradingsymbol": "MAGNUS",
       "exchange": "BSE",
@@ -11,18 +10,40 @@
       "quantity": 5,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 191.60,
+      "price": 182.05,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     },
     {
-      "tradingsymbol": "ENVAIREL",
+      "tradingsymbol": "EUREKAI",
       "exchange": "BSE",
       "transaction_type": "BUY",
-      "quantity": 13,
+      "quantity": 155,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 81.42,
+      "price": 6.86,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "EVEXIA",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 750,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 1.43,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "CUBIFIN",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 325,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 3.26,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     },
@@ -33,18 +54,18 @@
       "quantity": 2,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 649.15,
+      "price": 681.60,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     },
     {
-      "tradingsymbol": "CUBIFIN",
+      "tradingsymbol": "ENVAIREL",
       "exchange": "BSE",
       "transaction_type": "BUY",
-      "quantity": 350,
+      "quantity": 13,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 3.11,
+      "price": 85.49,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     },
@@ -52,21 +73,10 @@
       "tradingsymbol": "ANTARIKSH",
       "exchange": "BSE",
       "transaction_type": "BUY",
-      "quantity": 480,
+      "quantity": 450,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 2.23,
-      "validity": "DAY",
-      "tag": "basket-morning-v1"
-    },
-     {
-      "tradingsymbol": "SURBHIN",
-      "exchange": "BSE",
-      "transaction_type": "SELL",
-      "quantity": 6,
-      "product": "CNC",
-      "order_type": "LIMIT",
-      "price": 186.05,
+      "price": 2.34,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     },
@@ -74,10 +84,21 @@
       "tradingsymbol": "KUBERJI",
       "exchange": "BSE",
       "transaction_type": "BUY",
-      "quantity": 31,
+      "quantity": 32,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 30.99,
+      "price": 31.60,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "NATHUEC",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 35,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 29.32,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     }

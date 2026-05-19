@@ -24,3 +24,7 @@ logs/*.json
 .idea/logs/*.log
 logs/*.json
 !logs/.gitkeep
+
+
+# my notes
+notes.txt
