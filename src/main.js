@@ -47,12 +47,13 @@ require('dotenv').config();
 
 const cron   = require('node-cron');
 const logger = require('./logger');
-const { placeBasketOrders }     = require('./placeOrders');
-const { placePcaBasketOrders }  = require('./pcaOrders');
-const { startMonitor }          = require('./monitor');
-const { startHoldingsMonitor }  = require('./holdingsMonitor');
-const { startCircuitGuard }     = require('./circuitGuard');
-const { scheduleIlliquidSell }  = require('./illiquidSell');
+const { placeBasketOrders }           = require('./placeOrders');
+const { placePcaBasketOrders }        = require('./pcaOrders');
+const { startMonitor }                = require('./monitor');
+const { startHoldingsMonitor }        = require('./holdingsMonitor');
+const { startCircuitGuard }           = require('./circuitGuard');
+const { startPositionConversionGuard } = require('./positionConversionGuard');
+const { scheduleIlliquidSell }        = require('./illiquidSell');
 const { isDryRun, getISTTime, isMarketHours } = require('./utils');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -61,10 +62,11 @@ const { isDryRun, getISTTime, isMarketHours } = require('./utils');
 function printBanner() {
   logger.info('');
   logger.info('╔══════════════════════════════════════════════════════╗');
-  logger.info('║         ZERODHA TRADING BOT  v1.1                   ║');
+  logger.info('║         ZERODHA TRADING BOT  v1.2                   ║');
   logger.info('║         Kite Connect Automation Engine               ║');
   logger.info('║         + Operator-Exit Spike Monitor                ║');
   logger.info('║         + Periodic Call Auction (PCA) Scheduler      ║');
+  logger.info('║         + Lower→Upper Circuit Conversion Guard       ║');
   logger.info('╚══════════════════════════════════════════════════════╝');
   logger.info(`  Mode:    ${isDryRun() ? '🧪 DRY RUN (paper trading)' : '🔴 LIVE TRADING'}`);
   logger.info(`  Time:    ${getISTTime()}`);
@@ -294,11 +296,24 @@ async function main() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // COMMAND: conversionguard
+  // Only start the Position Conversion Guard in isolation (for testing).
+  // Watches ALL open CNC SELL orders and alerts when a stock is converting
+  // from lower circuit to upper circuit — then cancels the SELL order.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (command === 'conversionguard') {
+    logger.info('Command: position conversion guard only (no order scheduling)');
+    await startPositionConversionGuard();
+    // startPositionConversionGuard sets up WS + refresh interval; stays alive.
+    return;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // DEFAULT: start (full bot)
   // Schedule orders at 9:00 AM + polling monitor + spike monitor
   // ─────────────────────────────────────────────────────────────────────────
   if (command === 'start') {
-    logger.info('Starting full bot: scheduler + polling monitor + holdings spike monitor + circuit guard');
+    logger.info('Starting full bot: scheduler + monitors + circuit guard + conversion guard');
 
     // Set up the 9:00 AM regular basket scheduler (pre-open)
     scheduleOrders();
@@ -313,6 +328,13 @@ async function main() {
     // Polls every 30s for open BUY orders that are at lower circuit → cancels them
     startCircuitGuard().catch((err) =>
       logger.error('Circuit guard failed to start', { error: err.message })
+    );
+
+    // Start the Position Conversion Guard (WebSocket-based, runs in background)
+    // Watches ALL open CNC SELL orders for lower→upper circuit conversion signals.
+    // Cancels the SELL order + fires a loud alert when conversion is detected.
+    startPositionConversionGuard().catch((err) =>
+      logger.error('Position conversion guard failed to start', { error: err.message })
     );
 
     // Start the holdings spike monitor (WebSocket-based, runs in background)
@@ -330,13 +352,14 @@ async function main() {
   // Unknown command
   logger.error(`Unknown command: "${command}"`);
   logger.info('Available commands:');
-  logger.info('  node src/main.js               → Full bot (scheduler + monitors + circuit guard)');
-  logger.info('  node src/main.js orders        → Place regular basket orders now (9:00 AM pre-open)');
-  logger.info('  node src/main.js pcaorders     → Place PCA basket orders now (Session 1 / 9:30 AM)');
-  logger.info('  node src/main.js monitor       → Polling monitor only (positions, holdings, orders)');
-  logger.info('  node src/main.js holdingswatch → Real-time holdings spike monitor only');
-  logger.info('  node src/main.js illiquidsell  → Run illiquid sell routine immediately');
-  logger.info('  node src/login.js              → Manage login / access token');
+  logger.info('  node src/main.js                   → Full bot (scheduler + all monitors + guards)');
+  logger.info('  node src/main.js orders            → Place regular basket orders now (9:00 AM pre-open)');
+  logger.info('  node src/main.js pcaorders         → Place PCA basket orders now (Session 1 / 9:30 AM)');
+  logger.info('  node src/main.js monitor           → Polling monitor only (positions, holdings, orders)');
+  logger.info('  node src/main.js holdingswatch     → Real-time holdings spike monitor only');
+  logger.info('  node src/main.js illiquidsell      → Run illiquid sell routine immediately');
+  logger.info('  node src/main.js conversionguard   → Lower→Upper circuit conversion guard only');
+  logger.info('  node src/login.js                  → Manage login / access token');
   process.exit(1);
 }
 
