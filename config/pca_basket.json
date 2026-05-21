@@ -5,13 +5,13 @@
   "orders": [
     {
       "_comment": "⬇ Replace with your actual PCA stock. Change exchange to NSE or BSE as needed.",
-      "tradingsymbol":"EMPOWER-BE",
+      "tradingsymbol": "EMPOWER-BE",
       "exchange": "NSE",
       "transaction_type": "SELL",
       "quantity": 370,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 2.56,
+      "price": 2.53,
       "validity": "DAY",
       "tag": "pca-s1"
     }
