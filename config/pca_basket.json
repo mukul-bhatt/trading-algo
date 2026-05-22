@@ -11,9 +11,20 @@
       "quantity": 370,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 2.53,
+      "price": 2.48,
       "validity": "DAY",
       "tag": "pca-s1"
+    },
+    {
+      "tradingsymbol": "NATHUEC",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 34,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 30.49,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
     }
   ]
 }

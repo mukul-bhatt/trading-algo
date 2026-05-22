@@ -10,7 +10,95 @@
       "quantity": 5,
       "product": "CNC",
       "order_type": "LIMIT",
-      "price": 182.95,
+      "price": 164.35,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "EUREKAI",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 139,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 7.56,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "EVEXIA",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 672,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 1.56,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "CUBIFIN",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 293,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 3.59,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "ENVAIREL",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 12,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 94.24,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "GAGAN",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 50,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 21.55,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "SURBHIN",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 5,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 237.80,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "INSPIRISYS",
+      "exchange": "NSE",
+      "transaction_type": "BUY",
+      "quantity": 8,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 138.65,
+      "validity": "DAY",
+      "tag": "basket-morning-v1"
+    },
+    {
+      "tradingsymbol": "ANTARIKSH",
+      "exchange": "BSE",
+      "transaction_type": "BUY",
+      "quantity": 450,
+      "product": "CNC",
+      "order_type": "LIMIT",
+      "price": 2.57,
       "validity": "DAY",
       "tag": "basket-morning-v1"
     }
